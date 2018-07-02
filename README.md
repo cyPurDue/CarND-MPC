@@ -14,45 +14,45 @@ v: vehicle's velocity.
 cte: cross track error.
 epsi: vehicle's orientation error.
 
-These states are updated via the dynamic model:
-x_[t] = x[t-1] + v[t-1] * cos(psi[t-1]) * dt
-y_[t] = y[t-1] + v[t-1] * sin(psi[t-1]) * dt
-psi_[t] = psi[t-1] + v[t-1] / Lf * delta[t-1] * dt
-v_[t] = v[t-1] + a[t-1] * dt
-cte[t] = f(x[t-1]) - y[t-1] + v[t-1] * sin(epsi[t-1]) * dt
-epsi[t] = psi[t] - psides[t-1] + v[t-1] * delta[t-1] / Lf * dt
+These states are updated via the dynamic model: <br />
+x_[t] = x[t-1] + v[t-1] * cos(psi[t-1]) * dt <br />
+y_[t] = y[t-1] + v[t-1] * sin(psi[t-1]) * dt <br />
+psi_[t] = psi[t-1] + v[t-1] / Lf * delta[t-1] * dt <br />
+v_[t] = v[t-1] + a[t-1] * dt <br />
+cte[t] = f(x[t-1]) - y[t-1] + v[t-1] * sin(epsi[t-1]) * dt <br />
+epsi[t] = psi[t] - psides[t-1] + v[t-1] * delta[t-1] / Lf * dt <br />
 
-and implemented in the MPC.cpp as shown below:
-fg[1 + x_start + t] = x1 - (x0 + v0 * CppAD::cos(psi0) * dt);
-fg[1 + y_start + t] = y1 - (y0 + v0 * CppAD::sin(psi0) * dt);
-fg[1 + psi_start + t] = psi1 - (psi0 - v0 * delta0 / Lf * dt);
-fg[1 + v_start + t] = v1 - (v0 + a0 * dt);
-fg[1 + cte_start + t] = cte1 - ((f0 - y0) + (v0 * CppAD::sin(epsi0) * dt));
-fg[1 + epsi_start + t] = epsi1 - ((psi0 - psides0) + v0 * delta0 / Lf * dt);
+and implemented in the MPC.cpp as shown below: <br />
+fg[1 + x_start + t] = x1 - (x0 + v0 * CppAD::cos(psi0) * dt); <br />
+fg[1 + y_start + t] = y1 - (y0 + v0 * CppAD::sin(psi0) * dt); <br />
+fg[1 + psi_start + t] = psi1 - (psi0 - v0 * delta0 / Lf * dt); <br />
+fg[1 + v_start + t] = v1 - (v0 + a0 * dt); <br />
+fg[1 + cte_start + t] = cte1 - ((f0 - y0) + (v0 * CppAD::sin(epsi0) * dt)); <br />
+fg[1 + epsi_start + t] = epsi1 - ((psi0 - psides0) + v0 * delta0 / Lf * dt); <br />
 
-The output of the model are 2x variables, the throttle (acceleration) and steering (turning). In the main.cpp:
-double steer = j[1]["steering_angle"];
-double acc = j[1]["throttle"];
+The output of the model are 2x variables, the throttle (acceleration) and steering (turning). In the main.cpp: <br />
+double steer = j[1]["steering_angle"]; <br />
+double acc = j[1]["throttle"]; <br />
 
 In the output, the steer value is then going to be divided by deg2rad(25) so that the range is in between [-1, 1].
 
 The goal is to calculate the steer and throttle variable via optimizing the objective function, which is consist of 3x main parts.
--- part 1: square sum of error, to be minimized:
-for (int i = 0; i < N; i++) {
-  fg[0] += CTE_REF * CppAD::pow(vars[cte_start + i] - ref_cte, 2);
-  fg[0] += EPSI_REF * CppAD::pow(vars[epsi_start + i] - ref_epsi, 2);
-  fg[0] += V_REF * CppAD::pow(vars[v_start + i] - ref_v, 2);
-}
--- part 2: square sum of actuator, to have bounded actions.
-for (int i = 0; i < N-1; i++) {
-  fg[0] += ST_FAC * CppAD::pow(vars[delta_start + i], 2);
-  fg[0] += ACC_FAC * CppAD::pow(vars[a_start + i], 2);
-}
--- part 3: square sum of value gap between sequential actuations, to have smooth output.
-for (int i = 0; i < N-2; i++) {
-  fg[0] += ST_SEQ * CppAD::pow(vars[delta_start + i + 1] - vars[delta_start + i], 2);
-  fg[0] += ACC_SEQ * CppAD::pow(vars[a_start + i + 1] - vars[a_start + i], 2);
-}
+-- part 1: square sum of error, to be minimized: <br />
+for (int i = 0; i < N; i++) { <br />
+  fg[0] += CTE_REF * CppAD::pow(vars[cte_start + i] - ref_cte, 2); <br />
+  fg[0] += EPSI_REF * CppAD::pow(vars[epsi_start + i] - ref_epsi, 2); <br />
+  fg[0] += V_REF * CppAD::pow(vars[v_start + i] - ref_v, 2); <br />
+} <br />
+-- part 2: square sum of actuator, to have bounded actions. <br />
+for (int i = 0; i < N-1; i++) { <br />
+  fg[0] += ST_FAC * CppAD::pow(vars[delta_start + i], 2); <br />
+  fg[0] += ACC_FAC * CppAD::pow(vars[a_start + i], 2); <br />
+} <br />
+-- part 3: square sum of value gap between sequential actuations, to have smooth output. <br />
+for (int i = 0; i < N-2; i++) { <br />
+  fg[0] += ST_SEQ * CppAD::pow(vars[delta_start + i + 1] - vars[delta_start + i], 2); <br />
+  fg[0] += ACC_SEQ * CppAD::pow(vars[a_start + i + 1] - vars[a_start + i], 2); <br />
+} <br />
 
 The overall objective function is a sum of these three parts. Then to have a good model, I have spent a long time tuning this model, and below are some key changes that I have experienced to get the final result.
 
@@ -73,40 +73,40 @@ So with those parameters tuned, optimizing the objective function provides steer
 The N and dt values provides the consideration of prediction, which also impacts on the controller output. A too large N value will consider too many points in the future, and especially at sharp turns, this will make the output unstable. For example, during the time I firstly started with 25, it was very hard to make the sharp turn successful. I have tried from 25 down to 5 and finally chose N = 10, since a too small number will not be able to predict the dynamics ahead and also make the system oscillated. For the dt, I have tried from 0.05 to 0.25 where I can think this is within the stable range. I think 0.05 is a little too small to compensate the model, and dt = 0.1 gave a very good response. After dt above 0.25, the time gap is too long to handle the vehicle dynamics, and the system became unstable again. Overall, I used N = 10, dt = 0.1.
 
 ### 2.3 Polynomial Fitting and MPC Preprocessing
-The waypoints provided in the simulator are first converted to vehicle coordinates, in main.cpp, shown as below: 
-int n_ptsx = ptsx.size();
-auto ptsx_vec = Eigen::VectorXd(n_ptsx);
-auto ptsy_vec = Eigen::VectorXd(n_ptsx);
-for (unsigned int i = 0; i < n_ptsx; i++) {
-    double d_x = ptsx[i] - px;
-    double d_y = ptsy[i] - py;
-    double neg_psi = 0.0 - psi;
-    ptsx_vec(i) = d_x * cos(neg_psi) - d_y * sin(neg_psi);
-    ptsy_vec(i) = d_x * sin(neg_psi) + d_y * cos(neg_psi);
-}
+The waypoints provided in the simulator are first converted to vehicle coordinates, in main.cpp, shown as below:  <br />
+int n_ptsx = ptsx.size(); <br />
+auto ptsx_vec = Eigen::VectorXd(n_ptsx); <br />
+auto ptsy_vec = Eigen::VectorXd(n_ptsx); <br />
+for (unsigned int i = 0; i < n_ptsx; i++) { <br />
+    double d_x = ptsx[i] - px; <br />
+    double d_y = ptsy[i] - py; <br />
+    double neg_psi = 0.0 - psi; <br />
+    ptsx_vec(i) = d_x * cos(neg_psi) - d_y * sin(neg_psi); <br />
+    ptsy_vec(i) = d_x * sin(neg_psi) + d_y * cos(neg_psi); <br />
+} <br />
 
-Then, a 3-rd order polynimial was used to fit. 
-// fit poly
-auto coeffs = polyfit(ptsx_vec, ptsy_vec, 3);
+Then, a 3-rd order polynimial was used to fit.  <br />
+// fit poly <br />
+auto coeffs = polyfit(ptsx_vec, ptsy_vec, 3); <br />
 
-and the coefficients are then used to update the errors (cte and epsi) that are going to be used in MPC solver:
-const double cte0 = coeffs[0];
-const double epsi0 = -atan(coeffs[1]);
+and the coefficients are then used to update the errors (cte and epsi) that are going to be used in MPC solver: <br />
+const double cte0 = coeffs[0]; <br />
+const double epsi0 = -atan(coeffs[1]); <br />
 
 ### 2.4 Model Predictive Control with Latency
-The 100ms latency was considered by adding the latency part onto states. Multiplying the latency with corresponding velocity provides the latency part, and then they were added to the states, in the main.cpp, as shown below:
-const int actuator_delay = 100;
-const double delay = actuator_delay / 1000.0;
+The 100ms latency was considered by adding the latency part onto states. Multiplying the latency with corresponding velocity provides the latency part, and then they were added to the states, in the main.cpp, as shown below: <br />
+const int actuator_delay = 100; <br />
+const double delay = actuator_delay / 1000.0; <br />
 
-double steer = j[1]["steering_angle"];
-double acc = j[1]["throttle"];
+double steer = j[1]["steering_angle"]; <br />
+double acc = j[1]["throttle"]; <br />
 
-double x_delay = x0 + v * cos(psi0) * delay;
-double y_delay = y0 + v * sin(psi0) * delay;
-double psi_delay = psi0 - (v * steer * delay / Lf);
-double v_delay = v + acc * delay;
-double cte_delay = cte0 + v * sin(epsi0) * delay;
-double epsi_delay = epsi0 - v * atan(coeffs[1]) * delay / Lf;
+double x_delay = x0 + v * cos(psi0) * delay; <br /> 
+double y_delay = y0 + v * sin(psi0) * delay; <br />
+double psi_delay = psi0 - (v * steer * delay / Lf); <br />
+double v_delay = v + acc * delay; <br />
+double cte_delay = cte0 + v * sin(epsi0) * delay; <br />
+double epsi_delay = epsi0 - v * atan(coeffs[1]) * delay / Lf; <br />
 
 Then the states with delay considered are pushed into states to be solved.
 
